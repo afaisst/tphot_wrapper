@@ -343,17 +343,28 @@ def modelPSF_1D(psfcube,psfcube_h,param):
     return(X)
 
 
-
-
+# Write the log file to disk
+def write_log(LOG , file_name):
+    with open(file_name,"w") as f:
+	for ii in range(len(LOG)):
+		f.write( "%s\n" % (LOG[ii]) )
 
 
 
 ##################################
 
+
+
 ## User input
 userinput_file = sys.argv[1]
 with open(userinput_file) as json_file:
     userinput = json.load(json_file)
+
+## Log file
+LOG = []
+output_logfile_name = "%s.txt" % ".".join(userinput_file.split("/")[-1].split(".")[0:-1])
+print("output log file name: %s" % output_logfile_name)
+
 
 
 ########## RUN #################
@@ -365,10 +376,11 @@ with open(userinput_file) as json_file:
 this_work_dir = os.path.join("../work/" , userinput["lores_name"].split("/")[-1].split(".")[0])
 if not os.path.exists(this_work_dir):
     print("Creating work directory %s" % this_work_dir)
+    LOG.append("Creating work directory %s" % this_work_dir)
     sh.mkdir(this_work_dir)
 else:
     print("Work directory %s already exists" % this_work_dir)
-
+    LOG.append("Work directory %s already exists" % this_work_dir)
 
 ### 2. LOAD IMAGES AND SAVE THEM ==============
 
@@ -408,6 +420,8 @@ elif userinput["hires_psf_type"] == "psfex":
         hires_psf = hires_psf / np.nansum(hires_psf)
 else:
     print("PSF type not understood.")
+    LOG.append("PSF type not understood.")
+    write_log(LOG , file_name = output_logfile_name)
     quit()
 
 
@@ -422,6 +436,8 @@ elif userinput["lores_psf_type"] == "psfex":
         lores_psf = lores_psf / np.nansum(lores_psf)
 else:
     print("PSF type not understood.")
+    LOG.append("PSF type not understood.")
+    write_log(LOG , file_name = output_logfile_name)
     quit()
 
 ## Pixel scale fraction
@@ -443,14 +459,19 @@ pixscale_fraction = np.round(lores_pixscale/hires_pixscale)
 hires_pixscale_new = lores_pixscale / pixscale_fraction
 print("Old HIRES pixel scale: %g" % hires_pixscale)
 print("New HIRES pixel scale: %g" % hires_pixscale_new)
+LOG.append("Old HIRES pixel scale: %g" % hires_pixscale)
+LOG.append("New HIRES pixel scale: %g" % hires_pixscale_new)
 
 # Now we have to resample the HIRES image to the new pixel scale
 print("Rescaling HIRES image . . . " , end="")
+LOG.append("Rescaling HIRES image . . . ")
+start_time = time.time()
 hires_img_resamp = resize_psf(hires_img ,
                               input_pixel_scale = hires_pixscale,
                               output_pixel_scale = hires_pixscale_new
                              )
-print("done.")
+print(" done (in %g seconds)" % (round((time.time()-start_time)/1,2)) )
+LOG.append(" done (in %g seconds)" % (round((time.time()-start_time)/1,2)) )
 
 
 # Now, let's cut the LORES image to make it smaller. Later we cut any size, probably the size of the
@@ -535,6 +556,8 @@ hdul = fits.HDUList([hdu])
 hdul.verify("silentfix")
 hdul.writeto(os.path.join(this_work_dir , "loresrms.fits") , overwrite=True)
 
+print("New images saved.")
+LOG.append("New images saved.")
 
 
 ## 3. Create PSF kernel (in high-resolution pixel scale!) ###
@@ -545,6 +568,7 @@ hdul.writeto(os.path.join(this_work_dir , "loresrms.fits") , overwrite=True)
 ## need to convert lowres PSF to highres pixel scale
 frac = hires_pixscale / lores_pixscale
 print("Interpolating LORES PSF to HIRES pixelscale. Frac = %g" % frac )
+LOG.append("Interpolating LORES PSF to HIRES pixelscale. Frac = %g" % frac )
 lores_psf_interp2hires = resize_psf(lores_psf, input_pixel_scale=lores_pixscale , output_pixel_scale=hires_pixscale,order=3)
 lores_psf_interp2hires = lores_psf_interp2hires / np.nansum(lores_psf_interp2hires)
 
@@ -552,7 +576,6 @@ lores_psf_interp2hires = lores_psf_interp2hires / np.nansum(lores_psf_interp2hir
 hdu = fits.PrimaryHDU(data=lores_psf_interp2hires)
 hdul = fits.HDUList([hdu])
 hdul.writeto(os.path.join(this_work_dir , "lores_psf_interp2hires.fits") , overwrite=True )
-
 
 
 ## prepare target PSF
@@ -706,25 +729,23 @@ for key in PARS.keys():
 # c) Run SExtractor and load catalog
 start_time = time.time()
 print("running SExtractor . . .",end="")
+LOG.append("running SExtractor . . .")
 cmd = "%s %s -c %s " % (userinput["sex_command"],
                         os.path.join(this_work_dir , "hires.fits"),
                         config_this_process)
 print(cmd)
+LOG.append(cmd)
 subprocess.run(cmd , shell=True)
 print(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
+LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)))
 
 # d) Load catalog and create region file
 sexcat = ascii.read(sex_output_cat_hr_file)
 print("%g objects extracted" % len(sexcat))
+LOG.append("%g objects extracted" % len(sexcat))
 
-'''sel_fit = np.where(
-                  (sexcat["X_IMAGE"] > 200)
-                  & (sexcat["X_IMAGE"] < hires_img_cutout.shape[0] - 200 )
-                  & (sexcat["Y_IMAGE"] > 200)
-                  & (sexcat["Y_IMAGE"] < hires_img_cutout.shape[1] - 200 )
-                  )[0]
-sexcat = sexcat[sel_fit].copy()'''
 print("%g objects to fit" % len(sexcat))
+LOG.append("%g objects to fit" % len(sexcat))
 
 
 # write DS9 region file
@@ -747,6 +768,7 @@ hdul.writeto( os.path.join(this_work_dir,"seg.fits") , overwrite=True)
     
 ## Create final catalog
 print("Writing TPHOT table for HIRES image . . . " , end="")
+LOG.append("Writing TPHOT table for HIRES image . . . ")
 hires_cat = Table([sexcat["NUMBER"],
                    sexcat["X_IMAGE"],
                    sexcat["Y_IMAGE"],
@@ -764,6 +786,7 @@ hires_cat = Table([sexcat["NUMBER"],
 #hires_cat.write(os.path.join(outdir , "%s_tphot.cat" % label) , format="ascii.commented_header" , overwrite=True)
 hires_cat.write(os.path.join(this_work_dir , "tphotcat.fits") , format="fits" , overwrite=True)
 print("done.")
+LOG.append("done.")
 
 
 ## Write update.sh file
@@ -775,7 +798,7 @@ print("done.")
 create_TPHOT_template(filename=os.path.join(this_work_dir,"tphot.param"),
                       workdir=this_work_dir,
                       pixscaleratio=pixscale_fraction,
-                     dilation=True,
+                     dilation=userinput["perform_dilation"],
                       zeropoint = 27.0
                      )
 
@@ -784,12 +807,15 @@ create_TPHOT_template(filename=os.path.join(this_work_dir,"tphot.param"),
 
 start_time = time.time()
 print("running TPHOT . . .",end="")
+LOG.append("running TPHOT . . .")
 cmd = "TPhot --configuration %s/tphot.param --workdir ." % (this_work_dir)
 print(cmd)
+LOG.append(cmd)
 subprocess.run(cmd , shell=True)
 print(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
+LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
 
-#TPhot ../work/0005_calexp-HSC-I-9813-6_4/tphot.param .
-# TPhot --configuration ../work/0005_calexp-HSC-I-9813-6_4/tphot.param --workdir .
+# --log_level DEBUG
 
-# TPhot ../work/0005_calexp-HSC-I-9813-6_4/tphot.param . --log_level DEBUG
+
+write_log(LOG , file_name=output_logfile_name)
