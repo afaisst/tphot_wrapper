@@ -537,3 +537,259 @@ hdul.writeto(os.path.join(this_work_dir , "loresrms.fits") , overwrite=True)
 
 
 
+## 3. Create PSF kernel (in high-resolution pixel scale!) ###
+# We want a PSF kernel K such that PSF_lowres = K * PSF_highres where * is a convolution.
+# see here for an example on making matching kernels: https://photutils.readthedocs.io/en/stable/psf_matching.html
+
+
+## need to convert lowres PSF to highres pixel scale
+frac = hires_pixscale / lores_pixscale
+print("Interpolating LORES PSF to HIRES pixelscale. Frac = %g" % frac )
+lores_psf_interp2hires = resize_psf(lores_psf, input_pixel_scale=lores_pixscale , output_pixel_scale=hires_pixscale,order=3)
+lores_psf_interp2hires = lores_psf_interp2hires / np.nansum(lores_psf_interp2hires)
+
+## save
+hdu = fits.PrimaryHDU(data=lores_psf_interp2hires)
+hdul = fits.HDUList([hdu])
+hdul.writeto(os.path.join(this_work_dir , "lores_psf_interp2hires.fits") , overwrite=True )
+
+
+
+## prepare target PSF
+# this is just the lowres PSF in the hires pixel scale
+#target_psf = lores_psf_interp2hires.copy()
+target_psf = Cutout2D(data=lores_psf_interp2hires.copy(),
+               position=(lores_psf_interp2hires.shape[0]//2,lores_psf_interp2hires.shape[0]//2),
+               size=(101,101), # currently, this is hard coded. Change later!
+               mode="partial",
+                copy=True
+              ).data
+target_psf = target_psf / np.nansum(target_psf)
+
+## prepare the source PSF
+# this should be the hires PSF. However, the cutout needs to be the same
+# size as the target PSF. We therefore need to extrapolate it.
+# First try by just cutting it out and replace the NaNs with 0.
+source_psf = Cutout2D(data=hires_psf.copy(),
+               position=(hires_psf.shape[0]//2,hires_psf.shape[0]//2),
+               size=target_psf.shape,  # currently, this is hard coded. Change later!
+               mode="partial",
+                copy=True
+              ).data
+source_psf[np.isnan(source_psf)] = 0
+source_psf = source_psf / np.nansum(source_psf)
+
+
+## Now compute the Kernel
+kernel_HIRES_to_LOWRES = create_matching_kernel(source_psf=source_psf.copy(),
+                                                target_psf=target_psf.copy(),
+                                               window=TopHatWindow(0.4)) # this is currently hard coded. Change later?
+kernel_HIRES_to_LOWRES = kernel_HIRES_to_LOWRES / np.nansum(kernel_HIRES_to_LOWRES)
+
+
+## Save
+hdu = fits.PrimaryHDU(data=kernel_HIRES_to_LOWRES)
+hdul = fits.HDUList([hdu])
+hdul.writeto(os.path.join(this_work_dir , "kernel.fits") , overwrite=True )
+
+
+## Plot the PSFs for checking
+if userinput["make_plots"]:
+    fig = plt.figure(figsize=(15,5))
+    ax1 = fig.add_subplot(1,3,1)
+    ax2 = fig.add_subplot(1,3,2)
+    ax3 = fig.add_subplot(1,3,3)
+
+    ax1.imshow(hires_psf , norm=ImageNormalize(stretch=LogStretch()), vmax=0.03)
+    ax2.imshow(lores_psf , norm=ImageNormalize(stretch=LogStretch()) , vmax=0.03)
+    ax3.imshow(lores_psf_interp2hires , norm=ImageNormalize(stretch=LogStretch()) , vmax=0.01)
+
+    ax1.set_title("HIRES PSF")
+    ax2.set_title("LORES PSF")
+    ax3.set_title("LORES PSF (HIRES pixel scale)")
+
+    plt.savefig(os.path.join(this_work_dir,"psf_check.pdf") , bbox_inches="tight")
+    plt.show()
+    
+    
+
+## Plot the source/target PSF as well as the Kernel
+if userinput["make_plots"]:
+    fig = plt.figure(figsize=(10,10))
+    ax1 = fig.add_subplot(2,2,1) # target PSF
+    ax2 = fig.add_subplot(2,2,2) # source PSF
+    ax3 = fig.add_subplot(2,2,3) # Kernel
+    ax4 = fig.add_subplot(2,2,4) # cuts
+
+    # target, source, and Kernel images
+    ax1.imshow( target_psf , norm=ImageNormalize(stretch=LogStretch()) , vmin=0 , vmax=0.01)
+    ax2.imshow( source_psf , norm=ImageNormalize(stretch=LogStretch()) , vmin=0 , vmax=0.01)
+    ax3.imshow( kernel_HIRES_to_LOWRES , norm=ImageNormalize(stretch=LogStretch()) , vmin=0 , vmax=0.01)
+
+
+    # Plot the cuts
+    xx = np.arange(-(target_psf.shape[0]//2) , (target_psf.shape[0]//2+1) , 1)*hires_pixscale
+    ax4.plot(xx, target_psf[target_psf.shape[0]//2,] , label="Target PSF")
+
+    xx = np.arange(-(source_psf.shape[0]//2) , (source_psf.shape[0]//2+1) , 1)*hires_pixscale
+    ax4.plot(xx, source_psf[source_psf.shape[0]//2,] , label="Source PSF")
+
+    xx = np.arange(-(kernel_HIRES_to_LOWRES.shape[0]//2) , (kernel_HIRES_to_LOWRES.shape[0]//2+1) , 1)*hires_pixscale
+    ax4.plot(xx,  kernel_HIRES_to_LOWRES[kernel_HIRES_to_LOWRES.shape[0]//2,] , label="Kernel")
+
+    lores_conv_psf = convolve(source_psf,kernel_HIRES_to_LOWRES)
+    lores_conv_psf = lores_conv_psf / np.nansum(lores_conv_psf)
+    xx = np.arange(-(lores_conv_psf.shape[0]//2) , (lores_conv_psf.shape[0]//2+1) , 1)*hires_pixscale
+    ax4.plot(xx, lores_conv_psf[lores_conv_psf.shape[0]//2,] , dashes=(5,3) , label="source x kernel")
+
+    ax1.set_title("Target PSF")
+    ax2.set_title("Source PSF")
+    ax3.set_title("Kernel")
+
+    #ax4.set_yscale("log")
+    #ax4.set_ylim(1e-9,1e-1)
+    ax4.set_ylim(0,0.0025)
+    ax4.set_xlabel("Arcsec")
+    ax4.set_ylabel("flux")
+    ax4.legend(loc="best")
+    ax4.set_title("Cuts")
+
+    plt.savefig(os.path.join(this_work_dir,"kernel_check.pdf") , bbox_inches="tight")
+    plt.show()
+
+
+### 4. Create catalog for hires image. ######
+# This catalog must include:
+# id x_obj y_obj xmin ymin xmax ymax loc_bckg obj_flux
+# Because the images are background subtracted, loc_bckg=0 for all sources
+# The catalog can be created with SExtractor
+
+
+## Run SExtractor on HIRES image
+
+# a) Copy SExtractor config file
+config_default = "../sextractor_input/default.conf.interactive"
+config_this_process = os.path.join(this_work_dir,"sextractor.conv")
+cmd = "cp " + config_default + " " + config_this_process
+subprocess.run(cmd, shell=True)
+
+
+# b) Adjust configuration file
+sex_output_cat_hr_file = os.path.join(this_work_dir,"sextractor.cat")
+PARS = get_default_parfile()
+PARS["CATALOG_NAME"] = sex_output_cat_hr_file
+PARS["PARAMETERS_NAME"] = "../sextractor_input/sex.par"
+PARS["FILTER_NAME"] = "../sextractor_input/g2.8.conv"
+PARS["STARNNW_NAME"] = "../sextractor_input/default.nnw"
+PARS["CHECKIMAGE_NAME"] = os.path.join(this_work_dir,"seg.fits")
+PARS["CHECKIMAGE_TYPE"] = "SEGMENTATION"
+
+PARS["PHOT_APERTURES"] = ','.join(map(str, get_apertures(hires_pixscale,aperturelist_arcsec=[3.0]).tolist())) # Note: if number of apertures are changes, also change sex.par file!!!
+PARS["PIXEL_SCALE"] = hires_pixscale
+PARS["DEBLEND_MINCONT"] = 0.1
+PARS["DEBLEND_NTHRESH"] = 32
+PARS["DETECT_MINAREA"] = 20
+PARS["DETECT_THRESH"] = 2.0
+PARS["MAG_ZEROPOINT"] = userinput["hr_zeropoint"]
+PARS["ANALYSIS_THRESH"] = 1.5
+PARS["BACKPHOTO_TYPE"] = "LOCAL"  #GLOBAL
+PARS["SEEING_FWHM"] = 0.1 # Doesn't really matter for SExtractor in Arcsec
+PARS["CLEAN_PARAM"] = 1.0
+
+
+for key in PARS.keys():
+    replace_in_file(filename = config_this_process,
+                   old_string = "*" + key + "*",
+                   new_string = str(PARS[key]))
+
+
+# c) Run SExtractor and load catalog
+start_time = time.time()
+print("running SExtractor . . .",end="")
+cmd = "%s %s -c %s " % (userinput["sex_command"],
+                        os.path.join(this_work_dir , "hires.fits"),
+                        config_this_process)
+print(cmd)
+subprocess.run(cmd , shell=True)
+print(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
+
+# d) Load catalog and create region file
+sexcat = ascii.read(sex_output_cat_hr_file)
+print("%g objects extracted" % len(sexcat))
+
+'''sel_fit = np.where(
+                  (sexcat["X_IMAGE"] > 200)
+                  & (sexcat["X_IMAGE"] < hires_img_cutout.shape[0] - 200 )
+                  & (sexcat["Y_IMAGE"] > 200)
+                  & (sexcat["Y_IMAGE"] < hires_img_cutout.shape[1] - 200 )
+                  )[0]
+sexcat = sexcat[sel_fit].copy()'''
+print("%g objects to fit" % len(sexcat))
+
+
+# write DS9 region file
+with open( os.path.join(this_work_dir,"ds9.reg") , "w") as f:
+    f.write("# Region file format: DS9 version 4.1\n")
+    f.write("global color=green dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n")
+    f.write("fk5\n")
+    for iii in range(len(sexcat)):
+        f.write("circle(%3.10f,%3.10f,0.5\")\n" % (sexcat["ALPHA_J2000"][iii],sexcat["DELTA_J2000"][iii]) )
+
+# e) Load segmentation map and save
+with fits.open(os.path.join(this_work_dir,"seg.fits")) as hdul:
+    segmap = hdul[0].data
+    segmap_hdr = hdul[0].header
+segmap_hdr["XOFF"] = 0
+segmap_hdr["YOFF"] = 0
+hdu = fits.PrimaryHDU(data=segmap.copy() , header=segmap_hdr.copy())
+hdul = fits.HDUList([hdu])
+hdul.writeto( os.path.join(this_work_dir,"seg.fits") , overwrite=True)
+    
+## Create final catalog
+print("Writing TPHOT table for HIRES image . . . " , end="")
+hires_cat = Table([sexcat["NUMBER"],
+                   sexcat["X_IMAGE"],
+                   sexcat["Y_IMAGE"],
+                   sexcat["XMIN_IMAGE"],
+                   sexcat["YMIN_IMAGE"],
+                   sexcat["XMAX_IMAGE"],
+                   sexcat["YMAX_IMAGE"],
+                   np.repeat(0,len(sexcat)), # background subtracted
+                   sexcat["FLUX_AUTO"],
+                   sexcat["ISOAREA_IMAGE"]
+                  ],
+                  names=["SOURCE_ID","X_CENTER","Y_CENTER","X_MIN","Y_MIN","X_MAX","Y_MAX","BACKGROUND","FLUX_TOT","ISOAREA"],
+                 dtype=["int","f","f","f","f","f","f","f","f","f"])
+
+#hires_cat.write(os.path.join(outdir , "%s_tphot.cat" % label) , format="ascii.commented_header" , overwrite=True)
+hires_cat.write(os.path.join(this_work_dir , "tphotcat.fits") , format="fits" , overwrite=True)
+print("done.")
+
+
+## Write update.sh file
+#with open(os.path.join(outdir,"update.sh") , "w") as f:
+#    f.write("rsync -auvr * afaisst@vmjointproc01.ipac.caltech.edu://stage/irsa-jointproc-data02/TPHOT/test_sim/%s_input/" % label)
+    
+
+## Create template for TPHOT parameter file
+create_TPHOT_template(filename=os.path.join(this_work_dir,"tphot.param"),
+                      workdir=this_work_dir,
+                      pixscaleratio=pixscale_fraction,
+                     dilation=True,
+                      zeropoint = 27.0
+                     )
+
+
+## 5. RUN TPHOT
+
+start_time = time.time()
+print("running TPHOT . . .",end="")
+cmd = "TPhot --configuration %s/tphot.param --workdir ." % (this_work_dir)
+print(cmd)
+subprocess.run(cmd , shell=True)
+print(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
+
+#TPhot ../work/0005_calexp-HSC-I-9813-6_4/tphot.param .
+# TPhot --configuration ../work/0005_calexp-HSC-I-9813-6_4/tphot.param --workdir .
+
+# TPhot ../work/0005_calexp-HSC-I-9813-6_4/tphot.param . --log_level DEBUG
