@@ -457,7 +457,7 @@ print("done.")
 # LORES image itself.
 lores_x_size = lores_hdr["NAXIS2"]
 lores_y_size = lores_hdr["NAXIS1"]
-print(lores_x_size , lores_y_size)
+#print(lores_x_size , lores_y_size)
 
 # Figure out the size of the HIRES image. The size has also to be an integer fraction. Since
 # we resized the HIRES image, this should now be consistent.
@@ -465,7 +465,7 @@ hires_x_size = lores_x_size * pixscale_fraction # hires_hdr["NAXIS2"]
 hires_y_size = lores_y_size * pixscale_fraction # hires_hdr["NAXIS1"]
 #hires_x_size = hires_hdr["NAXIS2"]
 #hires_y_size = hires_hdr["NAXIS1"]
-print(hires_x_size , hires_y_size)
+#print(hires_x_size , hires_y_size)
 
 # First cut out the LORES image. We need to change some WCS keywords. I tried to use the header update function,
 # however, TPHOT crashes if that is used. Therefore I decided to do this by hand instead.
@@ -482,7 +482,7 @@ lores_hdr_cutout = fits.PrimaryHDU().header
 lores_hdr_cutout.update(lores_cutout.wcs.to_header()) # this makes TPHOT crash
 #lores_hdr_cutout["CRPIX1"] = lores_hdr_cutout["CRPIX1"] - 100
 #lores_hdr_cutout["CRPIX2"] = lores_hdr_cutout["CRPIX2"] + 100
-print(lores_img_cutout.shape[0] , lores_img_cutout.shape[1])
+#print(lores_img_cutout.shape[0] , lores_img_cutout.shape[1])
 
 # Also cutout the uncertainty image (no need to create a header here because it is the same as for the LORES image)
 lores_rms_cutout = Cutout2D(data=lores_rms.copy(),
@@ -534,3 +534,6 @@ hdu = fits.PrimaryHDU(data=lores_rms_cutout.copy() , header=lores_hdr_cutout.cop
 hdul = fits.HDUList([hdu])
 hdul.verify("silentfix")
 hdul.writeto(os.path.join(this_work_dir , "loresrms.fits") , overwrite=True)
+
+
+
