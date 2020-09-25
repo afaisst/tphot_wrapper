@@ -346,8 +346,8 @@ def modelPSF_1D(psfcube,psfcube_h,param):
 # Write the log file to disk
 def write_log(LOG , file_name):
     with open(file_name,"w") as f:
-	for ii in range(len(LOG)):
-		f.write( "%s\n" % (LOG[ii]) )
+        for ii in range(len(LOG)):
+            f.write( "%s\n" % (LOG[ii]) )
 
 
 
