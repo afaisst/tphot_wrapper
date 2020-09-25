@@ -1,0 +1,10 @@
+{"hires_name":"/stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/cutouts_test/calexp-HSC-I-9813-6_4/0005_calexp-HSC-I-9813-6_4-2226_acs_I_mosaic_30mas_sci.fits",
+    "lores_name":"/stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/cutouts_test/calexp-HSC-I-9813-6_4/0005_calexp-HSC-I-9813-6_4.fits",
+    "hires_psf_type":"fits",
+    "hires_psf_name":"/stage/irsa-jointproc-data03/ACS_COSMOS/from_irsa/sextractor/psf/HSC-I-9813-5_4-2812_psf.fits",
+    "lores_psf_type":"psfex",
+    "lores_psf_name":"/stage/irsa-jointproc-data02/PSFex/allcalexp_psfex_pipeline/output_variableMag/psfs/calexp-HSC-I-9813-6_4-9813_2226.psf",
+    "make_plots":true,
+    "sex_command": "/usr/bin/sextractor",
+     "hr_zeropoint": 25.94734
+}
