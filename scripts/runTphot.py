@@ -807,13 +807,13 @@ if userinput["reuse_dilationmap"]:
         if len(tmp) != len(hires_cat):
             print("Dilated and real catalog have not same length. ABORT")
             LOG.append("Dilated and real catalog have not same length. ABORT")
-            write_log(LOG , filename=output_logfile_name)
+            write_log(LOG , file_name=output_logfile_name)
             quit()
             
     else:
         print("Dilation maps not found. ABORT")
         LOG.append("Dilation maps not found. ABORT")
-        write_log(LOG , filename=output_logfile_name)
+        write_log(LOG , file_name=output_logfile_name)
         quit()
 
 
