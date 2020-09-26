@@ -366,6 +366,8 @@ output_logfile_name = "%s.txt" % ".".join(userinput_file.split("/")[-1].split(".
 print("output log file name: %s" % output_logfile_name)
 
 
+## Global start time
+start_time_global = time.time()
 
 ########## RUN #################
 
@@ -817,5 +819,20 @@ LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
 
 # --log_level DEBUG
 
+## 6. CLEAN UP
+
+print("Deleting files . . . " , end="")
+LOG.append("Deleting files . . . ")
+clean_file = ascii.read("tphot_remove_files.txt")
+for ff in clean_file:
+    if ff["clean"] == 1:
+        this_file = os.path.join(this_work_dir , ff["file"])
+        if os.path.exists(this_file):
+            os.remove(this_file)
+
+print("done.")
+LOG.append("done.")
+
+LOG.append("-- ALL DONE IN (in %g minutes) --" % (round((time.time()-start_time_global)/60,2)) )
 
 write_log(LOG , file_name=output_logfile_name)
