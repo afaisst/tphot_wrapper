@@ -795,7 +795,7 @@ LOG.append("done.")
 
 ## Re-use the dilated segmentation map?
 # user can use it from a previous run to save a lot of time
-if userinput["reuse_dilationmap"]:
+if (userinput["reuse_dilationmap"] == "true") & (userinput["reuse_dilationmap"] == "true"):
     print("Re-using dilated segmentation map and input catalog!")
     LOG.append("Re-using dilated segmentation map and input catalog")
 
@@ -829,7 +829,7 @@ create_TPHOT_template(filename=os.path.join(this_work_dir,"tphot.param"),
                       pixscaleratio=pixscale_fraction,
                      dilation=userinput["perform_dilation"],
                       zeropoint = 27.0,
-                      segmap="seg",
+                      segmap=this_segmap_name,
                       inputcat=this_tphot_input_cat_name
                      )
 
