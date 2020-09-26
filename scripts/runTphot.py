@@ -797,12 +797,12 @@ LOG.append("done.")
 # user can use it from a previous run to save a lot of time
 if (userinput["reuse_dilationmap"] == "true") & (userinput["reuse_dilationmap"] == "true"):
     print("Re-using dilated segmentation map and input catalog!")
-    LOG.append("Re-using dilated segmentation map and input catalog")
+    LOG.append("Re-using dilated segmentation map and input catalog!")
 
     if (os.path.exists( os.path.join(this_work_dir , "dilated_segmap.fits") )) & (os.path.exists( os.path.join(this_work_dir , "dilated_input_catalog.fits") )):
         this_segmap_name = "dilated_segmap.fits"
         this_tphot_input_cat_name = "dilated_input_catalog.fits"
-        userinput["perform_dilation"] = "true"
+        userinput["perform_dilation"] = "false"
         tmp = Table.read(os.path.join( this_work_dir , this_tphot_input_cat_name ) )
         if len(tmp) != len(hires_cat):
             print("Dilated and real catalog have not same length. ABORT")
