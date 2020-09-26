@@ -828,8 +828,8 @@ for ff in clean_file:
     if ff["clean"] == 1:
         this_file = os.path.join(this_work_dir , ff["file"])
         if os.path.exists(this_file):
-            print("Removing %s" % print(this_file))
-            LOG.append("Removing %s" % print(this_file))
+            print("Removing %s" % this_file)
+            LOG.append("Removing %s" % this_file)
             os.remove(this_file)
 
 print("done.")
