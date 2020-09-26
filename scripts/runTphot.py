@@ -54,7 +54,7 @@ def_cols = plt.rcParams['axes.prop_cycle'].by_key()['color']
 ### FUNCTIONS ###
 
 ## This function creates a placeholder TPHOT configuration file.
-def create_TPHOT_template(filename,workdir,pixscaleratio,dilation,zeropoint):
+def create_TPHOT_template(filename,workdir,pixscaleratio,dilation,zeropoint,segmap,inputcat):
     
     param_txt = '''## PARAMETERS FILE
 # Following are all the parameters available.
@@ -70,11 +70,11 @@ low_resolution_image=*WORKDIR*/lores.fits		# Input Low Resolution image
 low_resolution_rms=*WORKDIR*/loresrms.fits		# Input Low Resolution RMS
 rms_check=false							# Check RMS map
 rms_check_value=1000						# The RMS value limit, mandatory if rms_check is true
-real_catalog=*WORKDIR*/tphotcat.fits			# Input Catalog for use_real option
+real_catalog=*WORKDIR*/*INPUTCAT*			# Input Catalog for use_real option
 stamps_catalog=none			# Input Catalog for use_stamps option
 stamps_hdf5=none				# File name which contain all the stamps to be use in use_stamps option
 unresolved_catalog=none		# Input Catalog for use_unresolved option
-segmentation_map=*WORKDIR*/seg.fits			# Input Segmentation Map
+segmentation_map=*WORKDIR*/*SEGMAP*			# Input Segmentation Map
 save_intermediate=true						# Save intermediate results. If false it saves memory usage
 save_ram=false                              # Save RAM usage
 final_catalog=*WORKDIR*/tphot_output.fits			# Output catalog
@@ -181,6 +181,8 @@ dance_file=*WORKDIR*/ddiags.txt				# File containg shifts to be applied
     param_txt = param_txt.replace("*WORKDIR*",workdir)
     param_txt = param_txt.replace("*ZEROPOINT*",str(zeropoint))
     param_txt = param_txt.replace("*PIXSCALERATIO*",str(int(pixscaleratio)))
+    param_txt = param_txt.replace("*SEGMAP*",segmap)
+    param_txt = param_txt.replace("*INPUTCAT*",inputcat)
     
     if dilation:
         dilation = "true"
@@ -791,9 +793,34 @@ print("done.")
 LOG.append("done.")
 
 
-## Write update.sh file
-#with open(os.path.join(outdir,"update.sh") , "w") as f:
-#    f.write("rsync -auvr * afaisst@vmjointproc01.ipac.caltech.edu://stage/irsa-jointproc-data02/TPHOT/test_sim/%s_input/" % label)
+## Re-use the dilated segmentation map?
+# user can use it from a previous run to save a lot of time
+if userinput["reuse_dilationmap"]:
+    print("Re-using dilated segmentation map and input catalog!")
+    LOG.append("Re-using dilated segmentation map and input catalog")
+
+    if (os.path.exists( os.path.join(this_work_dir , "dilated_segmap.fits") )) & (os.path.exists( os.path.join(this_work_dir , "dilated_input_catalog.fits") )):
+        this_segmap_name = "dilated_segmap.fits"
+        this_tphot_input_cat_name = "dilated_input_catalog.fits"
+        userinput["perform_dilation"] = "true"
+        tmp = Table.read(os.path.join( this_work_dir , this_tphot_input_cat_name ) )
+        if len(tmp) != len(hires_cat):
+            print("Dilated and real catalog have not same length. ABORT")
+            LOG.append("Dilated and real catalog have not same length. ABORT")
+            write_log(LOG , filename=output_logfile_name)
+            quit()
+            
+    else:
+        print("Dilation maps not found. ABORT")
+        LOG.append("Dilation maps not found. ABORT")
+        write_log(LOG , filename=output_logfile_name)
+        quit()
+
+
+    
+else:
+    this_segmap_name = "seg.fits"
+    this_tphot_input_cat_name = "tphotcat.fits"
     
 
 ## Create template for TPHOT parameter file
@@ -801,7 +828,9 @@ create_TPHOT_template(filename=os.path.join(this_work_dir,"tphot.param"),
                       workdir=this_work_dir,
                       pixscaleratio=pixscale_fraction,
                      dilation=userinput["perform_dilation"],
-                      zeropoint = 27.0
+                      zeropoint = 27.0,
+                      segmap="seg",
+                      inputcat=this_tphot_input_cat_name
                      )
 
 
@@ -821,7 +850,7 @@ LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
 
 ## 6. CLEAN UP
 
-print("Cleaning up . . . " , end="")
+print("Cleaning up . . . ")
 LOG.append("Cleaning up . . . ")
 clean_file = ascii.read("tphot_remove_files.txt")
 for ff in clean_file:
