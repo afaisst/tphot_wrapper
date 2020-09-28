@@ -491,6 +491,9 @@ hires_y_size = lores_y_size * pixscale_fraction # hires_hdr["NAXIS1"]
 #hires_x_size = hires_hdr["NAXIS2"]
 #hires_y_size = hires_hdr["NAXIS1"]
 #print(hires_x_size , hires_y_size)
+print("Old size: " , hires_hdr["NAXIS1"] , hires_hdr["NAXIS2"])
+print("New size: " , hires_y_size , hires_x_size)
+
 
 # First cut out the LORES image. We need to change some WCS keywords. I tried to use the header update function,
 # however, TPHOT crashes if that is used. Therefore I decided to do this by hand instead.
@@ -504,7 +507,7 @@ lores_cutout = Cutout2D(data=lores_img.copy(),
               )
 lores_img_cutout = lores_cutout.data.copy()
 lores_hdr_cutout = fits.PrimaryHDU().header
-lores_hdr_cutout.update(lores_cutout.wcs.to_header()) # this makes TPHOT crash
+lores_hdr_cutout.update(lores_cutout.wcs.to_header())
 #lores_hdr_cutout["CRPIX1"] = lores_hdr_cutout["CRPIX1"] - 100
 #lores_hdr_cutout["CRPIX2"] = lores_hdr_cutout["CRPIX2"] + 100
 #print(lores_img_cutout.shape[0] , lores_img_cutout.shape[1])
@@ -534,28 +537,36 @@ hires_cutout = Cutout2D(data=hires_img_resamp.copy(),
               )
 hires_img_cutout = hires_cutout.data.copy()
 hires_hdr_cutout = fits.PrimaryHDU().header
-hires_hdr_cutout.update(hires_cutout.wcs.to_header()) # this makes TPHOT crash
+hires_hdr_cutout.update(hires_cutout.wcs.to_header())
+
+# Update WCS for resampled HR image.
+# We know what the lower left corner should have as RA/DEC. We can use that to anchor
+# the WCS and then change the pixel scale.
+hires_wcs = wcs.WCS(hires_hdr)
+radec_zero = hires_wcs.all_pix2world([[0,0]],1)[0]
+hires_hdr_cutout["PC1_1"] = (-1)*hires_pixscale_new/3600.0
+hires_hdr_cutout["PC2_2"] = hires_pixscale_new/3600.0
+hires_hdr_cutout["CRPIX1"] = 1
+hires_hdr_cutout["CRPIX2"] = 1
+hires_hdr_cutout["CRVAL1"] = radec_zero[0]
+hires_hdr_cutout["CRVAL2"] = radec_zero[1]
+#hires_hdr_cutout["NAXIS1"] = int(hires_y_size)
+#hires_hdr_cutout["NAXIS2"] = int(hires_x_size)
 #print(hires_img_cutout.shape[0] , hires_img_cutout.shape[1])
 
 
 ## Save the images to the work directory
-#hdu = fits.PrimaryHDU(data=hires_img.copy() , header=hires_hdr.copy())
 hdu = fits.PrimaryHDU(data=hires_img_cutout.copy() , header=hires_hdr_cutout.copy())
-#hdu = fits.PrimaryHDU(data=hires_img_cutout.copy() , header=hires_hdr.copy())
 hdul = fits.HDUList([hdu])
 hdul.verify("silentfix")
 hdul.writeto(os.path.join(this_work_dir , "hires.fits") , overwrite=True)
 
-#hdu = fits.PrimaryHDU(data=lores_img.copy() , header=lores_hdr.copy())
 hdu = fits.PrimaryHDU(data=lores_img_cutout.copy() , header=lores_hdr_cutout.copy())
-#hdu = fits.PrimaryHDU(data=lores_img_cutout.copy() , header=lores_hdr.copy())
 hdul = fits.HDUList([hdu])
 hdul.verify("silentfix")
 hdul.writeto(os.path.join(this_work_dir , "lores.fits") , overwrite=True)
 
-#hdu = fits.PrimaryHDU(data=lores_rms.copy() , header=lores_hdr.copy())
 hdu = fits.PrimaryHDU(data=lores_rms_cutout.copy() , header=lores_hdr_cutout.copy())
-#hdu = fits.PrimaryHDU(data=lores_rms_cutout.copy() , header=lores_hdr.copy())
 hdul = fits.HDUList([hdu])
 hdul.verify("silentfix")
 hdul.writeto(os.path.join(this_work_dir , "loresrms.fits") , overwrite=True)
@@ -837,7 +848,7 @@ create_TPHOT_template(filename=os.path.join(this_work_dir,"tphot.param"),
                       workdir=this_work_dir,
                       pixscaleratio=pixscale_fraction,
                      dilation=userinput["perform_dilation"],
-                      zeropoint = 27.0,
+                      zeropoint = userinput["lr_zeropoint"],
                       segmap=this_segmap_name,
                       inputcat=this_tphot_input_cat_name
                      )

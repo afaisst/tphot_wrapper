@@ -18,7 +18,7 @@ convolve_1st.h5                 1
 fit_catalog_1st.fits            1
 sextractor.cat                  0
 convolve_2nd.fits               1
-hires.fits                      1
+hires.fits                      0
 sextractor.conv                 0
 convolve_2nd.h5                 1
 kernel_check.pdf                0
