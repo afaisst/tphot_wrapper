@@ -633,14 +633,17 @@ hdul.writeto(os.path.join(this_work_dir , "kernel.fits") , overwrite=True )
 
 ## Plot the PSFs for checking
 if userinput["make_plots"]:
+    print("Making some Figures.")
+    LOG.append("Making some Figures.")
+
     fig = plt.figure(figsize=(15,5))
     ax1 = fig.add_subplot(1,3,1)
     ax2 = fig.add_subplot(1,3,2)
     ax3 = fig.add_subplot(1,3,3)
 
-    ax1.imshow(hires_psf , norm=ImageNormalize(stretch=LogStretch()), vmax=0.03)
-    ax2.imshow(lores_psf , norm=ImageNormalize(stretch=LogStretch()) , vmax=0.03)
-    ax3.imshow(lores_psf_interp2hires , norm=ImageNormalize(stretch=LogStretch()) , vmax=0.01)
+    ax1.imshow(hires_psf , norm=ImageNormalize(stretch=LogStretch(), vmax=0.03) )
+    ax2.imshow(lores_psf , norm=ImageNormalize(stretch=LogStretch(), vmax=0.03) )
+    ax3.imshow(lores_psf_interp2hires , norm=ImageNormalize(stretch=LogStretch(), vmax=0.01) )
 
     ax1.set_title("HIRES PSF")
     ax2.set_title("LORES PSF")
@@ -650,9 +653,6 @@ if userinput["make_plots"]:
     plt.show()
     
     
-
-## Plot the source/target PSF as well as the Kernel
-if userinput["make_plots"]:
     fig = plt.figure(figsize=(10,10))
     ax1 = fig.add_subplot(2,2,1) # target PSF
     ax2 = fig.add_subplot(2,2,2) # source PSF
@@ -660,9 +660,9 @@ if userinput["make_plots"]:
     ax4 = fig.add_subplot(2,2,4) # cuts
 
     # target, source, and Kernel images
-    ax1.imshow( target_psf , norm=ImageNormalize(stretch=LogStretch()) , vmin=0 , vmax=0.01)
-    ax2.imshow( source_psf , norm=ImageNormalize(stretch=LogStretch()) , vmin=0 , vmax=0.01)
-    ax3.imshow( kernel_HIRES_to_LOWRES , norm=ImageNormalize(stretch=LogStretch()) , vmin=0 , vmax=0.01)
+    ax1.imshow( target_psf , norm=ImageNormalize(stretch=LogStretch(), vmin=0 , vmax=0.01) )
+    ax2.imshow( source_psf , norm=ImageNormalize(stretch=LogStretch(), vmin=0 , vmax=0.01) )
+    ax3.imshow( kernel_HIRES_to_LOWRES , norm=ImageNormalize(stretch=LogStretch() , vmin=0 , vmax=0.01) )
 
 
     # Plot the cuts
