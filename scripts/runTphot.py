@@ -185,10 +185,10 @@ dance_file=*WORKDIR*/ddiags.txt				# File containg shifts to be applied
     param_txt = param_txt.replace("*INPUTCAT*",inputcat)
     
     if dilation:
-        dilation = "true"
+        dilation_string = "true"
     else:
-        dilation = "false"
-    param_txt = param_txt.replace("*DILATION*",dilation)
+        dilation_string = "false"
+    param_txt = param_txt.replace("*DILATION*",dilation_string)
     
     with open(filename,"w") as f:
         f.write(param_txt)
@@ -792,23 +792,32 @@ hires_cat.write(os.path.join(this_work_dir , "tphotcat.fits") , format="fits" , 
 print("done.")
 LOG.append("done.")
 
+## Use dilation?
+# Because if we reuse the dilation segmentation map, we set "perform_dilation" to false.
+# Therefore set here a flag
+if userinput["perform_dilation"]:
+    DODILATION = True
+else:
+    DODILATION = False
 
 ## Re-use the dilated segmentation map?
 # user can use it from a previous run to save a lot of time
-if (userinput["reuse_dilationmap"] == "true") & (userinput["reuse_dilationmap"] == "true"):
+if (userinput["reuse_dilationmap"] == True) & (userinput["perform_dilation"] == True):
     print("Re-using dilated segmentation map and input catalog!")
     LOG.append("Re-using dilated segmentation map and input catalog!")
 
     if (os.path.exists( os.path.join(this_work_dir , "dilated_segmap.fits") )) & (os.path.exists( os.path.join(this_work_dir , "dilated_input_catalog.fits") )):
         this_segmap_name = "dilated_segmap.fits"
         this_tphot_input_cat_name = "dilated_input_catalog.fits"
-        userinput["perform_dilation"] = "false"
         tmp = Table.read(os.path.join( this_work_dir , this_tphot_input_cat_name ) )
         if len(tmp) != len(hires_cat):
             print("Dilated and real catalog have not same length. ABORT")
             LOG.append("Dilated and real catalog have not same length. ABORT")
             write_log(LOG , file_name=output_logfile_name)
             quit()
+
+        print("Set perform_dilation to False")
+        userinput["perform_dilation"] = False
             
     else:
         print("Dilation maps not found. ABORT")
@@ -848,7 +857,23 @@ LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
 
 # --log_level DEBUG
 
-## 6. CLEAN UP
+
+## 6. COMPUTE RESIDUALS
+
+# Load the residual map
+with fits.open( os.path.join(this_work_dir , "residual_2nd.fits") ) as hdul:
+    res_img = hdul[0].data
+    res_hdr = hdul[0].header
+
+# Load the (dilated) segmentation map
+with fits.open( os.path.join(this_work_dir , this_segmap_name) ) as hdul:
+    seg_img = hdul[0].data
+    seg_hdr = hdul[0].header
+
+# get unique IDS on segmentation map
+
+
+## END. CLEAN UP
 
 print("Cleaning up . . . ")
 LOG.append("Cleaning up . . . ")

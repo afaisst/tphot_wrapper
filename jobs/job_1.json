@@ -5,8 +5,8 @@
     "lores_psf_type":"psfex",
     "lores_psf_name":"/stage/irsa-jointproc-data02/PSFex/allcalexp_psfex_pipeline/output_variableMag/psfs/calexp-HSC-I-9813-6_4-9813_2226.psf",
     "make_plots":true,
-    "perform_dilation":"true",
-    "reuse_dilationmap":"true",
+    "perform_dilation":true,
+    "reuse_dilationmap":true,
     "sex_command": "/usr/bin/sextractor",
      "hr_zeropoint": 25.94734
 }
