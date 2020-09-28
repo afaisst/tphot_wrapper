@@ -884,7 +884,9 @@ with fits.open( os.path.join(this_work_dir , this_segmap_name) ) as hdul:
 # get unique IDS on segmentation map
 
 
-## END. CLEAN UP
+
+
+## 7. CLEAN UP
 
 print("Cleaning up . . . ")
 LOG.append("Cleaning up . . . ")
