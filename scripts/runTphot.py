@@ -23,6 +23,7 @@ import astropy.wcs as wcs
 from astropy.convolution import Gaussian2DKernel
 from astropy.modeling.models import Gaussian2D
 from astropy.nddata.utils import Cutout2D
+from astropy.coordinates import SkyCoord
 
 from astropy.visualization import LogStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
@@ -184,7 +185,7 @@ dance_file=*WORKDIR*/ddiags.txt				# File containg shifts to be applied
     param_txt = param_txt.replace("*SEGMAP*",segmap)
     param_txt = param_txt.replace("*INPUTCAT*",inputcat)
     
-    if dilation:
+    if dilation == "true":
         dilation_string = "true"
     else:
         dilation_string = "false"
@@ -483,29 +484,28 @@ hires_img_resamp = resize_psf(hires_img ,
 print(" done (in %g seconds)" % (round((time.time()-start_time)/1,2)) )
 LOG.append(" done (in %g seconds)" % (round((time.time()-start_time)/1,2)) )
 
+# Need to update header here
+# We know what the lower left corner should have as RA/DEC. We can use that to anchor
+# the WCS and then change the pixel scale.
+hires_wcs = wcs.WCS(hires_hdr.copy())
+radec_zero = hires_wcs.all_pix2world([[0,0]],1)[0] # (0,0) position in RA and DEC of original image should be the same on resampled image
+hires_hdr_resamp = hires_hdr.copy()
+hires_hdr_resamp["PC1_1"] = (-1)*hires_pixscale_new/3600.0
+hires_hdr_resamp["PC2_2"] = hires_pixscale_new/3600.0
+hires_hdr_resamp["CRPIX1"] = 1
+hires_hdr_resamp["CRPIX2"] = 1
+hires_hdr_resamp["CRVAL1"] = radec_zero[0]
+hires_hdr_resamp["CRVAL2"] = radec_zero[1]
 
-# Now, let's cut the LORES image to make it smaller. Later we cut any size, probably the size of the
-# LORES image itself.
+# Now, let's cut the LORES image. Here we could also add some WCS shifts if we want. But we don't do this in this version
+# Just set the size to the actual size. So the cutout is more like a copy.
 lores_x_size = lores_hdr["NAXIS2"]
 lores_y_size = lores_hdr["NAXIS1"]
-#print(lores_x_size , lores_y_size)
 
-# Figure out the size of the HIRES image. The size has also to be an integer fraction. Since
-# we resized the HIRES image, this should now be consistent.
-hires_x_size = lores_x_size * pixscale_fraction # hires_hdr["NAXIS2"]
-hires_y_size = lores_y_size * pixscale_fraction # hires_hdr["NAXIS1"]
-#hires_x_size = hires_hdr["NAXIS2"]
-#hires_y_size = hires_hdr["NAXIS1"]
-#print(hires_x_size , hires_y_size)
-print("Old size: " , hires_hdr["NAXIS1"] , hires_hdr["NAXIS2"])
-print("New size: " , hires_y_size , hires_x_size)
-
-
-# First cut out the LORES image. We need to change some WCS keywords. I tried to use the header update function,
-# however, TPHOT crashes if that is used. Therefore I decided to do this by hand instead.
+# First cut out the LORES image.
 lores_cutout = Cutout2D(data=lores_img.copy(),
-               position=(lores_img.shape[0]//2+0,lores_img.shape[1]//2+0),
-               size=(lores_x_size , lores_y_size), # currently, this is hard coded. Change later!
+               position=(lores_img.shape[1]//2+0,lores_img.shape[0]//2+0),
+               size=(lores_x_size , lores_y_size),
                mode="partial",
                copy=True,
                fill_value=0,
@@ -514,13 +514,11 @@ lores_cutout = Cutout2D(data=lores_img.copy(),
 lores_img_cutout = lores_cutout.data.copy()
 lores_hdr_cutout = fits.PrimaryHDU().header
 lores_hdr_cutout.update(lores_cutout.wcs.to_header())
-#lores_hdr_cutout["CRPIX1"] = lores_hdr_cutout["CRPIX1"] - 100
-#lores_hdr_cutout["CRPIX2"] = lores_hdr_cutout["CRPIX2"] + 100
-#print(lores_img_cutout.shape[0] , lores_img_cutout.shape[1])
+
 
 # Also cutout the uncertainty image (no need to create a header here because it is the same as for the LORES image)
 lores_rms_cutout = Cutout2D(data=lores_rms.copy(),
-               position=(lores_rms.shape[0]//2+0,lores_rms.shape[1]//2+0),
+               position=(lores_rms.shape[1]//2+0,lores_rms.shape[0]//2+0),
                size=(lores_x_size , lores_y_size), # currently, this is hard coded. Change later!
                mode="partial",
                copy=True,
@@ -529,35 +527,34 @@ lores_rms_cutout = Cutout2D(data=lores_rms.copy(),
               )
 lores_rms_cutout = lores_rms_cutout.data.copy()
 
-# Finally cut out the HIRES image. We are using here the resized/resampled image. We are cutting in pixel frame
-# so we don't need the WCS here, actually. Note that also here we add a WCS to the header, however, this WCS 
-# is wrong because we resampled the image. 
+# Finally cut out the HIRES image. We are using here the resized/resampled image. Note that TPHOT works
+# in pixel space. The image have therefore be aligned in pixel space (modulo the different pixel scale). We
+# should therefore have the centers aligned and the size consistent with the pixscale_fraction.
+# First we have to figure out the size of the HIRES image. The size has also to be an integer fraction. Since
+# we resized the HIRES image, this should now be consistent.
+hires_x_size = lores_x_size * pixscale_fraction
+hires_y_size = lores_y_size * pixscale_fraction
+print("Old size: " , hires_hdr["NAXIS1"] , hires_hdr["NAXIS2"])
+print("New size: " , hires_y_size , hires_x_size)
+
+# get the center
+radec_center_lr = wcs.WCS(lores_hdr_cutout).all_pix2world([[ lores_img_cutout.shape[1]//2 , lores_img_cutout.shape[0]//2 ]] , 0)[0]
+position = SkyCoord(radec_center_lr[0] , radec_center_lr[1], frame='fk5' , unit="deg")
+
 hires_cutout = Cutout2D(data=hires_img_resamp.copy(),
-               position=(hires_img_resamp.shape[0]//2,hires_img_resamp.shape[1]//2),
+               #position=(hires_img_resamp.shape[0]//2,hires_img_resamp.shape[1]//2), # need to cut here at center position
+               position=position, # need to cut here at center position
                size=(hires_x_size,hires_y_size), # currently, this is hard coded. Change later!
                mode="partial",
                copy=True,
                fill_value=0,
-               wcs=wcs.WCS(hires_hdr.copy())
+               #wcs=wcs.WCS(hires_hdr.copy())
+               wcs=wcs.WCS(hires_hdr_resamp.copy())
               )
 hires_img_cutout = hires_cutout.data.copy()
 hires_hdr_cutout = fits.PrimaryHDU().header
 hires_hdr_cutout.update(hires_cutout.wcs.to_header())
 
-# Update WCS for resampled HR image.
-# We know what the lower left corner should have as RA/DEC. We can use that to anchor
-# the WCS and then change the pixel scale.
-hires_wcs = wcs.WCS(hires_hdr.copy())
-radec_zero = hires_wcs.all_pix2world([[0,0]],1)[0]
-hires_hdr_cutout["PC1_1"] = (-1)*hires_pixscale_new/3600.0
-hires_hdr_cutout["PC2_2"] = hires_pixscale_new/3600.0
-hires_hdr_cutout["CRPIX1"] = 1
-hires_hdr_cutout["CRPIX2"] = 1
-hires_hdr_cutout["CRVAL1"] = radec_zero[0]
-hires_hdr_cutout["CRVAL2"] = radec_zero[1]
-#hires_hdr_cutout["NAXIS1"] = int(hires_y_size)
-#hires_hdr_cutout["NAXIS2"] = int(hires_x_size)
-#print(hires_img_cutout.shape[0] , hires_img_cutout.shape[1])
 
 
 ## Save the images to the work directory
@@ -578,7 +575,6 @@ hdul.writeto(os.path.join(this_work_dir , "loresrms.fits") , overwrite=True)
 
 print("New images saved.")
 LOG.append("New images saved.")
-
 
 ## 3. Create PSF kernel (in high-resolution pixel scale!) ###
 # We want a PSF kernel K such that PSF_lowres = K * PSF_highres where * is a convolution.
@@ -637,7 +633,7 @@ hdul.writeto(os.path.join(this_work_dir , "kernel.fits") , overwrite=True )
 
 
 ## Plot the PSFs for checking
-if userinput["make_plots"]:
+if userinput["make_plots"] == "true":
     print("Making some Figures.")
     LOG.append("Making some Figures.")
 
@@ -655,7 +651,7 @@ if userinput["make_plots"]:
     ax3.set_title("LORES PSF (HIRES pixel scale)")
 
     plt.savefig(os.path.join(this_work_dir,"psf_check.pdf") , bbox_inches="tight")
-    plt.show()
+    plt.close()
     
     
     fig = plt.figure(figsize=(10,10))
@@ -698,7 +694,7 @@ if userinput["make_plots"]:
     ax4.set_title("Cuts")
 
     plt.savefig(os.path.join(this_work_dir,"kernel_check.pdf") , bbox_inches="tight")
-    plt.show()
+    plt.close()
 
 
 ### 4. Create catalog for hires image. ######
@@ -811,14 +807,18 @@ LOG.append("done.")
 ## Use dilation?
 # Because if we reuse the dilation segmentation map, we set "perform_dilation" to false.
 # Therefore set here a flag
-if userinput["perform_dilation"]:
+if userinput["perform_dilation"] == "true":
+    print("Performing dilation during TPHOT run")
+    LOG.append("Performing dilation during TPHOT run")
     DODILATION = True
 else:
     DODILATION = False
+    print("Running TPHOT without dilation")
+    LOG.append("Running TPHOT without dilation")
 
 ## Re-use the dilated segmentation map?
 # user can use it from a previous run to save a lot of time
-if (userinput["reuse_dilationmap"] == True) & (userinput["perform_dilation"] == True):
+if (userinput["reuse_dilationmap"] == "true") & (userinput["perform_dilation"] == "true"):
     print("Re-using dilated segmentation map and input catalog!")
     LOG.append("Re-using dilated segmentation map and input catalog!")
 
@@ -833,13 +833,13 @@ if (userinput["reuse_dilationmap"] == True) & (userinput["perform_dilation"] == 
             quit()
 
         print("Set perform_dilation to False")
-        userinput["perform_dilation"] = False
+        userinput["perform_dilation"] = "false"
             
     else:
-        print("Dilation maps not found. ABORT")
-        LOG.append("Dilation maps not found. ABORT")
-        write_log(LOG , file_name=output_logfile_name)
-        quit()
+        print("Dilation maps not found. Running Dilation")
+        LOG.append("Dilation maps not found. Running Dilation")
+        this_segmap_name = "seg.fits"
+        this_tphot_input_cat_name = "tphotcat.fits"
 
 
     
@@ -896,7 +896,7 @@ tphotinputcat = Table.read( os.path.join(this_work_dir , this_tphot_input_cat_na
 tphotoutputcat = Table.read( os.path.join(this_work_dir , "tphot_output.fits") )
 
 # Also load corresponding TRACTOR residual image if requested
-if userinput["compare_to_tractor"]:
+if userinput["compare_to_tractor"] == "true":
     with fits.open( os.path.join( userinput["tractor_main_path"] , "%s_%s" % (userinput["tractor_prefix"] , this_work_name) , "lr_tractor_results.fits" ) ) as hdul:
         restractor_img = hdul["COMPL_RES"].data
 
@@ -910,9 +910,10 @@ tphotoutputcat["sum_sq_res_per_pix"] = np.repeat(-99.0  , len(tphotoutputcat))
 tphotoutputcat["sum_sq_restractor_per_pix"] = np.repeat(-99.0  , len(tphotoutputcat))
 
 start_time = time.time()
-print("Calculating residuals for the sources . . . ", end="")
+print("Calculating residuals for the sources . . . ")
 LOG.append("Calculating residuals for the sources . . .")
-for ii in range(100):
+for ii in range(len(tphotinputcat)):
+
 
     # first get all the info (note that these relate to the HR image!)
     x_center = tphotinputcat["X_CENTER"][ii]
@@ -968,7 +969,7 @@ for ii in range(100):
     # Finally, do the measurements
     this_num_pix = len( np.where( this_segmap_rs == 1 )[0] ) # number of pixels on mask
     this_sum_sq_res = np.nansum( np.power(this_res_cutout*this_segmap_rs,2) ) / this_num_pix
-    if userinput["compare_to_tractor"]:
+    if userinput["compare_to_tractor"] == "true":
         this_sum_sq_restractor = np.nansum( np.power(this_restractor_cutout*this_segmap_rs,2) ) / this_num_pix
     else:
         this_sum_sq_restractor = -99
