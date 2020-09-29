@@ -38,14 +38,14 @@ dirs = glob.glob( os.path.join( tractor_main_path , "cutouts" , "calexp-HSC-I*" 
 
 ## Create the job files
 cc = 1 # counter
-for dd,this_dir in enumerate(dirs[0:1]):
+for dd,this_dir in enumerate(dirs):
     
     # get file in this directory
     files = glob.glob( os.path.join( this_dir , "*_calexp-HSC-I-*_acs_I_mosaic_30mas_sci.fits" ) )
     # /stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/cutouts/calexp-HSC-I-9812-0_6/0012_calexp-HSC-I-9812-0_6-4564_acs_I_mosaic_30mas_sci.fits
     # 0013_calexp-HSC-I-9812-0_1.fits
 
-    for ff,this_file in enumerate(files[0:1]):
+    for ff,this_file in enumerate(files):
         this_job = dict()
 
         # get base name
@@ -93,21 +93,3 @@ for dd,this_dir in enumerate(dirs[0:1]):
 
         cc = cc + 1
 
-        #print(this_job)
-
-'''{"hires_name":"/stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/cutouts_test/calexp-HSC-I-9813-6_4/0005_calexp-HSC-I-9813-6_4-2226_acs_I_mosaic_30mas_sci.fits",
-    "lores_name":"/stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/cutouts_test/calexp-HSC-I-9813-6_4/0005_calexp-HSC-I-9813-6_4.fits",
-    "hires_psf_type":"fits",
-    "hires_psf_name":"/stage/irsa-jointproc-data03/ACS_COSMOS/from_irsa/sextractor/psf/HSC-I-9813-5_4-2812_psf.fits",
-    "lores_psf_type":"psfex",
-    "lores_psf_name":"/stage/irsa-jointproc-data02/PSFex/allcalexp_psfex_pipeline/output_variableMag/psfs/calexp-HSC-I-9813-6_4-9813_2226.psf",
-    "lr_zeropoint":27,
-    "hr_zeropoint": 25.94734,
-    "make_plots":true,
-    "perform_dilation":true,
-    "reuse_dilationmap":true,
-    "compare_to_tractor":true,
-    "tractor_main_path":"/stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/work/",
-    "tractor_prefix":"SB4",
-    "sex_command": "/usr/bin/sextractor"
-}'''
