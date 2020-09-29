@@ -376,8 +376,14 @@ start_time_global = time.time()
 
 ### 1. CREATE WORK DIRECTORY AND DEFINE OTHER NAMES ==============
 
+## Get the name
+this_work_name = userinput["lores_name"].split("/")[-1].split(".")[0]
+print("++++++++++++ Processing %s ++++++++++++" % this_work_name)
+LOG.append("++++++++++++ Processing %s ++++++++++++" % this_work_name)
+
+
 ## Work directory
-this_work_dir = os.path.join("../work/" , userinput["lores_name"].split("/")[-1].split(".")[0])
+this_work_dir = os.path.join("../work/" , this_work_name)
 if not os.path.exists(this_work_dir):
     print("Creating work directory %s" % this_work_dir)
     LOG.append("Creating work directory %s" % this_work_dir)
@@ -526,14 +532,13 @@ lores_rms_cutout = lores_rms_cutout.data.copy()
 # Finally cut out the HIRES image. We are using here the resized/resampled image. We are cutting in pixel frame
 # so we don't need the WCS here, actually. Note that also here we add a WCS to the header, however, this WCS 
 # is wrong because we resampled the image. 
-# TODO: need to change the WCS so it reflects the resampled image (not so easy....)
 hires_cutout = Cutout2D(data=hires_img_resamp.copy(),
                position=(hires_img_resamp.shape[0]//2,hires_img_resamp.shape[1]//2),
                size=(hires_x_size,hires_y_size), # currently, this is hard coded. Change later!
                mode="partial",
                copy=True,
                fill_value=0,
-               wcs=wcs.WCS(hires_hdr)
+               wcs=wcs.WCS(hires_hdr.copy())
               )
 hires_img_cutout = hires_cutout.data.copy()
 hires_hdr_cutout = fits.PrimaryHDU().header
@@ -542,7 +547,7 @@ hires_hdr_cutout.update(hires_cutout.wcs.to_header())
 # Update WCS for resampled HR image.
 # We know what the lower left corner should have as RA/DEC. We can use that to anchor
 # the WCS and then change the pixel scale.
-hires_wcs = wcs.WCS(hires_hdr)
+hires_wcs = wcs.WCS(hires_hdr.copy())
 radec_zero = hires_wcs.all_pix2world([[0,0]],1)[0]
 hires_hdr_cutout["PC1_1"] = (-1)*hires_pixscale_new/3600.0
 hires_hdr_cutout["PC2_2"] = hires_pixscale_new/3600.0
@@ -870,8 +875,13 @@ LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
 
 
 ## 6. COMPUTE RESIDUALS
+# Here we compute the residuals in the (dilated) segmentation map region for each source.
+# This turned out to be a bit more difficult because the segmentation map is on the HR image
+# pixel scale. We have to translate this to LR image scale.
 
-# Load the residual map
+## First load all the things we need
+
+# residual image
 with fits.open( os.path.join(this_work_dir , "residual_2nd.fits") ) as hdul:
     res_img = hdul[0].data
     res_hdr = hdul[0].header
@@ -881,9 +891,103 @@ with fits.open( os.path.join(this_work_dir , this_segmap_name) ) as hdul:
     seg_img = hdul[0].data
     seg_hdr = hdul[0].header
 
-# get unique IDS on segmentation map
+# TPHOT catalog
+tphotinputcat = Table.read( os.path.join(this_work_dir , this_tphot_input_cat_name) )
+tphotoutputcat = Table.read( os.path.join(this_work_dir , "tphot_output.fits") )
+
+# Also load corresponding TRACTOR residual image if requested
+if userinput["compare_to_tractor"]:
+    with fits.open( os.path.join( userinput["tractor_main_path"] , "%s_%s" % (userinput["tractor_prefix"] , this_work_name) , "lr_tractor_results.fits" ) ) as hdul:
+        restractor_img = hdul["COMPL_RES"].data
 
 
+
+
+## Now go through the catalog
+# for testing only do 1
+tphotoutputcat["nbr_pix_in_mask"] = np.repeat(-99.0  , len(tphotoutputcat))
+tphotoutputcat["sum_sq_res_per_pix"] = np.repeat(-99.0  , len(tphotoutputcat))
+tphotoutputcat["sum_sq_restractor_per_pix"] = np.repeat(-99.0  , len(tphotoutputcat))
+
+start_time = time.time()
+print("Calculating residuals for the sources . . . ", end="")
+LOG.append("Calculating residuals for the sources . . .")
+for ii in range(100):
+
+    # first get all the info (note that these relate to the HR image!)
+    x_center = tphotinputcat["X_CENTER"][ii]
+    y_center = tphotinputcat["Y_CENTER"][ii]
+    x_min = tphotinputcat["X_MIN"][ii]-50 # add here a bit of a margin, better when we resample the image
+    y_min = tphotinputcat["Y_MIN"][ii]-50 # add here a bit of a margin, better when we resample the image
+    x_max = tphotinputcat["X_MAX"][ii]+50 # add here a bit of a margin, better when we resample the image
+    y_max = tphotinputcat["Y_MAX"][ii]+50 # add here a bit of a margin, better when we resample the image
+    sid = tphotinputcat["SOURCE_ID"][ii]
+
+    # do some checks
+    x_min = np.nanmax([x_min,0])
+    y_min = np.nanmax([y_min,0])
+    x_max = np.nanmin([x_max,seg_hdr["NAXIS2"]])
+    y_max = np.nanmin([y_max,seg_hdr["NAXIS1"]])
+
+    #print(x_center , y_center , x_min , y_min , x_max , y_max)
+
+
+    # now, create segmentation map for this object = mask
+    this_segmap = seg_img[int(y_min):int(y_max) , int(x_min):int(x_max)].copy() # cut
+    this_segmap[this_segmap != sid] = 0 # make it binary
+    this_segmap[this_segmap == sid] = 1 # make it binary
+    this_segmap_rs = resize_psf(this_segmap , input_pixel_scale=hires_pixscale_new , output_pixel_scale=lores_pixscale) # note that we resampled the hires image, so we have to use the new pixel scale here
+    this_segmap_rs[this_segmap_rs < 0.5] = 0 # make it binary again
+    this_segmap_rs[this_segmap_rs >= 0.5] = 1 # make it binary again
+
+
+    # get the X and Y on the LR image.
+    # For this, we have to go via the RA/DEC coordinates of the HR image.
+    radec_center = wcs.WCS(hires_hdr_cutout).all_pix2world([[x_center,y_center]],0)[0]
+    radec_min = wcs.WCS(hires_hdr_cutout).all_pix2world([[x_min,y_min]],0)[0]
+    radec_max = wcs.WCS(hires_hdr_cutout).all_pix2world([[x_max,y_max]],0)[0]
+    XY_center = wcs.WCS(lores_hdr).all_world2pix([radec_center],0)[0]
+    XY_min = wcs.WCS(lores_hdr).all_world2pix([radec_min],0)[0]
+    XY_max = wcs.WCS(lores_hdr).all_world2pix([radec_max],0)[0]
+
+    # Now do the cutout
+    position = ( np.nanmedian([XY_min[0] , XY_max[0]]),
+           np.nanmedian([XY_min[1] , XY_max[1]]) ) # position is center of stamp
+    size = ( this_segmap_rs.shape[0] , 
+        this_segmap_rs.shape[1] ) # size is size of resampled segmentation map
+
+    
+    #print("Position: " , position)
+    #print("Size: " , size)
+
+    this_lores_cutout = Cutout2D(lores_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
+    this_res_cutout = Cutout2D(res_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
+    this_restractor_cutout = Cutout2D(restractor_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
+
+
+    # Finally, do the measurements
+    this_num_pix = len( np.where( this_segmap_rs == 1 )[0] ) # number of pixels on mask
+    this_sum_sq_res = np.nansum( np.power(this_res_cutout*this_segmap_rs,2) ) / this_num_pix
+    if userinput["compare_to_tractor"]:
+        this_sum_sq_restractor = np.nansum( np.power(this_restractor_cutout*this_segmap_rs,2) ) / this_num_pix
+    else:
+        this_sum_sq_restractor = -99
+    
+    #print(sid , this_num_pix , this_sum_sq_res , this_sum_sq_restractor) # COMMENT THIS OUT LATER
+
+    # add to the catalog
+    tphotoutputcat["nbr_pix_in_mask"][ii] = this_num_pix
+    tphotoutputcat["sum_sq_res_per_pix"][ii] = this_sum_sq_res
+    tphotoutputcat["sum_sq_restractor_per_pix"][ii] = this_sum_sq_restractor
+
+
+## Save catalog again
+for key in tphotoutputcat.keys(): # remove all the units else a lot of complaining. Don't really need those.
+    tphotoutputcat[key].unit = ""
+tphotoutputcat.write( os.path.join(this_work_dir , "tphot_output.fits") , overwrite=True , format="fits")
+
+print(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
+LOG.append(" done (in %g minutes)" % (round((time.time()-start_time)/60,2)) )
 
 
 ## 7. CLEAN UP

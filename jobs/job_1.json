@@ -8,6 +8,9 @@
     "hr_zeropoint": 25.94734,
     "make_plots":true,
     "perform_dilation":true,
-    "reuse_dilationmap":false,
+    "reuse_dilationmap":true,
+    "compare_to_tractor":true,
+    "tractor_main_path":"/stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/work/",
+    "tractor_prefix":"SB4",
     "sex_command": "/usr/bin/sextractor"
 }

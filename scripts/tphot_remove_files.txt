@@ -3,7 +3,7 @@ collage_1st.fits                1
 cutout.h5                       1
 loresrms.fits                   1
 collage_2nd.fits                1
-ddiags.txt                      1
+ddiags.txt                      0
 psf_check.pdf                   0
 collage_stats_1st.ini           1
 dilated_input_catalog.fits      0
@@ -18,14 +18,14 @@ convolve_1st.h5                 1
 fit_catalog_1st.fits            1
 sextractor.cat                  0
 convolve_2nd.fits               1
-hires.fits                      1
+hires.fits                      0
 sextractor.conv                 0
 convolve_2nd.h5                 1
 kernel_check.pdf                0
 tphotcat.fits                   0
 covar_1st.txt                   1
 kernel.fits                     0
-tphot_output.fits               1
+tphot_output.fits               0
 covar_2nd.txt                   1
 lores.fits                      0
 tphot.param                     0
