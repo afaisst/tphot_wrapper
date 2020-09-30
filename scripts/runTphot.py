@@ -1006,6 +1006,13 @@ for ii in range(len(tphotinputcat)):
     tphotoutputcat["sum_sq_res_per_pix"][ii] = this_sum_sq_res
     tphotoutputcat["sum_sq_restractor_per_pix"][ii] = this_sum_sq_restractor
 
+    # test plot
+    #plt.imshow(this_lores_cutout , origin="lower" , interpolation="none")
+    #plt.contour(this_segmap_rs , levels=1)
+    #plt.title("original LORES")
+    #plt.savefig("test.pdf" ,bbox_inches="tight")
+    #plt.close()
+
 
 ## Save catalog again
 for key in tphotoutputcat.keys(): # remove all the units else a lot of complaining. Don't really need those.
