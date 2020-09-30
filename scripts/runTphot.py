@@ -378,7 +378,10 @@ start_time_global = time.time()
 ### 1. CREATE WORK DIRECTORY AND DEFINE OTHER NAMES ==============
 
 ## Get the name
-this_work_name = userinput["lores_name"].split("/")[-1].split(".")[0]
+if userinput["base_name"] != "":
+    this_work_name = "%s_%s" % (userinput["base_name"] , userinput["lores_name"].split("/")[-1].split(".")[0])
+else:
+    this_work_name = userinput["lores_name"].split("/")[-1].split(".")[0]
 print("++++++++++++ Processing %s ++++++++++++" % this_work_name)
 LOG.append("++++++++++++ Processing %s ++++++++++++" % this_work_name)
 
@@ -490,12 +493,33 @@ LOG.append(" done (in %g seconds)" % (round((time.time()-start_time)/1,2)) )
 hires_wcs = wcs.WCS(hires_hdr.copy())
 radec_zero = hires_wcs.all_pix2world([[0,0]],1)[0] # (0,0) position in RA and DEC of original image should be the same on resampled image
 hires_hdr_resamp = hires_hdr.copy()
-hires_hdr_resamp["PC1_1"] = (-1)*hires_pixscale_new/3600.0
-hires_hdr_resamp["PC2_2"] = hires_pixscale_new/3600.0
+
+if "PC1_1" in list(hires_hdr.keys()):
+    print("PC keywords do exist, update these.")
+    LOG.append("PC keywords do exist, update these.")
+    hires_hdr_resamp["PC1_1"] = (-1)*hires_pixscale_new/3600.0
+    hires_hdr_resamp["PC2_2"] = hires_pixscale_new/3600.0
+else:
+    print("PC keywords do not exist, update CD keywords instead.")
+    LOG.append("PC keywords do not exist, update CD keywords instead.")
+    hires_hdr_resamp["CD1_1"] = (-1)*hires_pixscale_new/3600.0
+    hires_hdr_resamp["CD2_2"] = hires_pixscale_new/3600.0
+
+'''if "CDELT1" in list(hires_hdr.keys()):
+    print("CDELT keywords do exist, update these, too")
+    LOG.append("CDELT keywords do exist, update these, too")
+    if hires_hdr["CDELT"]
+    hires_hdr_resamp["CDELT1"] = (-1)*hires_pixscale_new/3600.0
+    hires_hdr_resamp["CDELT2"] = hires_pixscale_new/3600.0
+else:
+    print("CDELT keywords do not exist")
+    LOG.append("CDELT keywords do not exist")
+'''
 hires_hdr_resamp["CRPIX1"] = 1
 hires_hdr_resamp["CRPIX2"] = 1
 hires_hdr_resamp["CRVAL1"] = radec_zero[0]
 hires_hdr_resamp["CRVAL2"] = radec_zero[1]
+
 
 # Now, let's cut the LORES image. Here we could also add some WCS shifts if we want. But we don't do this in this version
 # Just set the size to the actual size. So the cutout is more like a copy.
@@ -548,7 +572,6 @@ hires_cutout = Cutout2D(data=hires_img_resamp.copy(),
                mode="partial",
                copy=True,
                fill_value=0,
-               #wcs=wcs.WCS(hires_hdr.copy())
                wcs=wcs.WCS(hires_hdr_resamp.copy())
               )
 hires_img_cutout = hires_cutout.data.copy()
@@ -963,7 +986,9 @@ for ii in range(len(tphotinputcat)):
 
     this_lores_cutout = Cutout2D(lores_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
     this_res_cutout = Cutout2D(res_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
-    this_restractor_cutout = Cutout2D(restractor_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
+    
+    if userinput["compare_to_tractor"] == "true":
+        this_restractor_cutout = Cutout2D(restractor_img.copy() , position=position , size=size , copy=True , mode="partial" , fill_value=np.nan).data
 
 
     # Finally, do the measurements

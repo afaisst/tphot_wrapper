@@ -10,6 +10,9 @@ import glob
 
 ## Some paths -----
 
+# base name of simulation
+base_name_of_simulation = ""
+
 # output path (where json job files are saved)
 job_files_output_path = "/stage/irsa-jointproc-data02/TPHOT/run_test_Sep25/run/jobs/"
 
@@ -38,15 +41,17 @@ dirs = glob.glob( os.path.join( tractor_main_path , "cutouts" , "calexp-HSC-I*" 
 
 ## Create the job files
 cc = 1 # counter
-for dd,this_dir in enumerate(dirs):
+for dd,this_dir in enumerate(dirs[0:1]): # ***** CHANGE THIS BEFORE RUNNING *****
     
     # get file in this directory
     files = glob.glob( os.path.join( this_dir , "*_calexp-HSC-I-*_acs_I_mosaic_30mas_sci.fits" ) )
     # /stage/irsa-jointproc-data03/TRACTOR/run_acs_jsp_full_SB4_Jul20/run/cutouts/calexp-HSC-I-9812-0_6/0012_calexp-HSC-I-9812-0_6-4564_acs_I_mosaic_30mas_sci.fits
     # 0013_calexp-HSC-I-9812-0_1.fits
 
-    for ff,this_file in enumerate(files):
+    for ff,this_file in enumerate(files[0:1]): # ***** CHANGE THIS BEFORE RUNNING *****
         this_job = dict()
+
+        this_job["base_name"] = base_name_of_simulation
 
         # get base name
         tilenbr = this_file.split("/")[-1].split("_")[0]
