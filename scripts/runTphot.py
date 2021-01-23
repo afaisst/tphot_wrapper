@@ -963,6 +963,18 @@ for ii in range(len(tphotinputcat)):
     this_segmap_rs = resize_psf(this_segmap , input_pixel_scale=hires_pixscale_new , output_pixel_scale=lores_pixscale) # note that we resampled the hires image, so we have to use the new pixel scale here
     this_segmap_rs[this_segmap_rs < 0.5] = 0 # make it binary again
     this_segmap_rs[this_segmap_rs >= 0.5] = 1 # make it binary again
+    
+    # [NEW Jan 22, 2021]: If the resampled segmentation map is all 0 that means the object
+    # was probably too small and did not get resampled well. In that case, just make a box
+    # in the center that acts like an aperture. Number of pixels should be same as high-res image
+    # modulo pixel scale.
+    if np.nansum(this_segmap_rs) == 0:
+        nbr_pix_on_side = np.sqrt( len(this_segmap) * (hires_pixscale_new**2) / (lores_pixscale**2) )
+        alt_half_width = np.ceil(nbr_pix_on_side / 2)
+        print("LORES nbr pixels on side: " , nbr_pix_on_side)
+        print("Alt half width: " , alt_half_width)
+        cent = [this_segmap_rs.shape[0]//2 , this_segmap_rs.shape[1]//2 ]
+        this_segmap_rs[ int(cent[0]-alt_half_width):int(cent[0]+alt_half_width) , int(cent[1]-alt_half_width):int(cent[1]+alt_half_width) ] = 1
 
 
     # get the X and Y on the LR image.
